@@ -1,12 +1,3 @@
-'''
-USE yolov5.image_recognition_server.py
-'''
-
-
-
-
-
-
 # YOLOv5 🚀 by Ultralytics, GPL-3.0 license
 """
 Run inference on images, videos, directories, streams, etc.
@@ -46,7 +37,7 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 import imagezmq
 import cv2
-from yolov5.utils.augmentations import letterbox
+from utils.augmentations import letterbox
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -54,12 +45,12 @@ if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
-from yolov5.utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr,
+from models.common import DetectMultiBackend
+from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
+from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr,
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
-from yolov5.utils.plots import Annotator, colors, save_one_box
-from yolov5.utils.torch_utils import select_device, time_sync
+from utils.plots import Annotator, colors, save_one_box
+from utils.torch_utils import select_device, time_sync
 
 
 @torch.no_grad()
@@ -103,6 +94,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     if pt or jit:
         model.model.half() if half else model.model.float()
 
+    # Dataloader
+    #dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
     bs = 1
     print('Using RPi Camera')
 
@@ -110,14 +103,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     print('\nStarted Image Recognition Server.\n')
 
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz), half=half)
-
     # Set up image_rec server
 
     count = 1
     while True:
 
-        command, image = image_hub.recv_image() # Command is either 'view' or 'capture'
-
+        command, image = image_hub.recv_image()
         image = cv2.resize(image, (416, 320))
         image_copy = image.copy()
 
@@ -154,12 +145,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             img_pred = annotator.result()
 
             if command == 'capture':
-                cv2.imwrite(r'C:/Users/Atul/Desktop/Rpi/image_recognition/MDP_Verification/IMG_' + str(count) + '.jpg', img_pred)
+                cv2.imwrite(r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/MDP_Verification/IMG_' + str(count) + '.jpg', img_pred)
                 print('Saved Image')
                 count += 1
 
             cv2.imshow("RPi Camera", img_pred)
-            cv2.waitKey(1)
+            cv2.waitKey(1)  # 1 millisecond
 
 
 def parse_opt():
