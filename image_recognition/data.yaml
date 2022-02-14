@@ -1,0 +1,5 @@
+train: ../train/images
+val: ../valid/images
+
+nc: 31
+names: ['alphabetA', 'alphabetB', 'alphabetC', 'alphabetD', 'alphabetE', 'alphabetF', 'alphabetG', 'alphabetH', 'alphabetS', 'alphabetT', 'alphabetU', 'alphabetV', 'alphabetW', 'alphabetX', 'alphabetY', 'alphabetZ', 'bullseye', 'down_arrow', 'eight', 'five', 'four', 'left_arrow', 'nine', 'one', 'right_arrow', 'seven', 'six', 'stop', 'three', 'two', 'up_arrow']
