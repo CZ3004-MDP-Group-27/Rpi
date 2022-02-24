@@ -11,9 +11,10 @@ import threading
 
 
 if __name__ == '__main__':
-
-    #TODO: 
+ 
     '''
+    Flow:
+    
     1. Connect all deviced
     2. Receive Map Data from Android Tablet
     3. Send Map Data to Algorithm PC
@@ -26,5 +27,48 @@ if __name__ == '__main__':
     10. Send the label to Android Tablet in the required format
     11. Once all 5 images have been detected send a command to Image Rec Server to merge all detected images
     '''
+    
+    pc = SocketServer()
+    pc.setup(port=5005, clients=1)
+    pc.wait_for_client()
 
-    pass
+    android = BluetoothServer()
+    android.setup()
+    android.wait_for_client()
+
+    stm = STMServer()
+    stm.setup(port='/dev/ttyUSB0', baud_rate=115200)
+
+    camera = Camera()
+    camera.setup(connect_to='tcp://192.168.27.28:5555') # Set IP properly
+
+    # Wait for android data
+    map_data = android.read() # might need to decode
+    map_data = map_data.split('-')
+
+    instructions = []
+
+    if map_data[0] == 'map':
+        pc.send(map_data[1])
+        instructions = pc.read()
+
+
+    for idx, instruction in enumerate(instructions):
+
+        for step in instruction:
+
+            step = step.ljust(20)
+            stm.send(step)
+
+            ack = stm.read()
+
+        android.send('Reached obstacle')
+        label = camera.send_image(command='capture')
+        label = label.decode('utf-8')
+
+        if label != -1 and label != 0:
+            android.send(f'{idx + 1},{label}')
+
+    stop = android.read()
+
+    camera.send_image(command='merge')
