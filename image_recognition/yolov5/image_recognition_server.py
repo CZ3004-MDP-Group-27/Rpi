@@ -29,6 +29,7 @@ import os
 import sys
 from pathlib import Path
 from click import command
+from PIL import Image
 
 import cv2
 import torch
@@ -52,6 +53,8 @@ from utils.general import (LOGGER, check_file, check_img_size, check_imshow, che
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
+
+verification_dir = r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/MDP_Verification/'
 
 names_to_label_map = {
     'alphabetA': 20,
@@ -87,6 +90,29 @@ names_to_label_map = {
     'up_arrow': 36,
     'None': -1
 }
+
+
+def merge_images(directory):
+
+    img_1 = Image.open(directory + "IMG_1.jpg")
+    img_2 = Image.open(directory + "IMG_2.jpg")
+    img_3 = Image.open(directory + "IMG_3.jpg")
+    img_4 = Image.open(directory + "IMG_4.jpg")
+    img_5 = Image.open(directory + "IMG_5.jpg")
+
+    imgSize = img_1.size
+
+    #empty image
+    mergedImg = Image.new(mode="RGB", size=(3*imgSize[0], 2*imgSize[1]), color=(0,0,0))
+
+    mergedImg.paste(img_1, (0,0))
+    mergedImg.paste(img_2, (imgSize[0],0))
+    mergedImg.paste(img_3, (imgSize[0]*2,0))
+    mergedImg.paste(img_4, (0,imgSize[1]))
+    mergedImg.paste(img_5, (imgSize[0],imgSize[1]))
+
+    mergedImg.save(directory + "mergedImage.jpg")
+    mergedImg.show()
 
 
 @torch.no_grad()
@@ -145,7 +171,12 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     while True:
 
         command, image = image_hub.recv_image()
-        print(command)
+        
+        #TODO: Can use break and stop server?
+        if command == 'merge':
+            merge_images()
+            continue
+
         image = cv2.resize(image, (416, 320))
         image_copy = image.copy()
 
@@ -188,7 +219,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             if command == 'capture':
                 # TODO: REMOVE THIS LINE AFTER CHECKLIST
                 if count < 1000: # To make sure not many images are taken
-                    cv2.imwrite(r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/MDP_Verification/IMG_' + str(count) + '.jpg', img_pred)
+                    cv2.imwrite(verification_dir + 'IMG_' + str(count) + '.jpg', img_pred)
                     print('Saved Image')
                 count += 1
 
