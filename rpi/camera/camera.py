@@ -1,6 +1,7 @@
 #run this program on each RPi to send an image to PC
 import socket
 import time
+from click import command
 from imutils.video import VideoStream
 import imagezmq
 from numpy import imag
@@ -19,7 +20,7 @@ class Camera():
     def setup(self, connect_to):
         self.sender = imagezmq.ImageSender(connect_to=connect_to) #'tcp://192.168.0.101:5555') # Check local IP
 
-    def send_image(self):
+    def send_image(self, command='view'):
         self.camera.capture(self.rawCapture, format='bgr')
         image = self.rawCapture.array
         self.rawCapture.truncate(0)
@@ -29,7 +30,7 @@ class Camera():
             return
         
         try:
-            label = self.sender.send_image(self.rpi_name, image)
+            label = self.sender.send_image(command, image)
             print(f'Sent Image to destination PC')
             return label
         

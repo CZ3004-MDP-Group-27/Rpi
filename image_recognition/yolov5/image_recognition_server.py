@@ -53,6 +53,42 @@ from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
 
+names_to_label_map = {
+    'alphabetA': 20,
+    'alphabetB': 21, 
+    'alphabetC': 22, 
+    'alphabetD': 23, 
+    'alphabetE': 24, 
+    'alphabetF': 25, 
+    'alphabetG': 26, 
+    'alphabetH': 27, 
+    'alphabetS': 28, 
+    'alphabetT': 29,  
+    'alphabetU': 30, 
+    'alphabetV': 31, 
+    'alphabetW': 32, 
+    'alphabetX': 33, 
+    'alphabetY': 34, 
+    'alphabetZ': 35, 
+    'bullseye': 0, 
+    'down_arrow': 37, 
+    'eight': 18, 
+    'five': 15, 
+    'four': 14, 
+    'left_arrow': 39, 
+    'nine': 19, 
+    'one': 11, 
+    'right_arrow': 38, 
+    'seven': 17, 
+    'six': 16, 
+    'stop': 40, 
+    'three': 13, 
+    'two': 12, 
+    'up_arrow': 36,
+    'None': -1
+}
+
+
 @torch.no_grad()
 def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
@@ -109,6 +145,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     while True:
 
         command, image = image_hub.recv_image()
+        print(command)
         image = cv2.resize(image, (416, 320))
         image_copy = image.copy()
 
@@ -135,22 +172,28 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                 
                 if conf > highest_conf:
                     highest_conf = conf
-                    main_class = cls
+                    label_name = names[int(cls)]
+                    main_class = names_to_label_map[label_name]
 
                 c = int(cls)  # integer class
                 label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
                 annotator.box_label(xyxy, label, color=colors(c, True))
-        
+
+            if main_class == None:
+                main_class == '-1'
+            print(int(main_class))
             image_hub.send_reply(str(int(main_class)).encode())
             img_pred = annotator.result()
 
             if command == 'capture':
-                cv2.imwrite(r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/MDP_Verification/IMG_' + str(count) + '.jpg', img_pred)
-                print('Saved Image')
+                # TODO: REMOVE THIS LINE AFTER CHECKLIST
+                if count < 1000: # To make sure not many images are taken
+                    cv2.imwrite(r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/MDP_Verification/IMG_' + str(count) + '.jpg', img_pred)
+                    print('Saved Image')
                 count += 1
 
-            cv2.imshow("RPi Camera", img_pred)
-            cv2.waitKey(1)  # 1 millisecond
+            # cv2.imshow("RPi Camera", img_pred)
+            # cv2.waitKey(1)  # 1 millisecond
 
 
 def parse_opt():
