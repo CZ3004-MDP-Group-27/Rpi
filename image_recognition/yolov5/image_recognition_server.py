@@ -40,6 +40,8 @@ import imagezmq
 import cv2
 from utils.augmentations import letterbox
 
+import math
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -92,24 +94,29 @@ names_to_label_map = {
 }
 
 
-def merge_images(directory):
+def merge_images(directory, count=8):
 
-    img_1 = Image.open(directory + "IMG_1.jpg")
-    img_2 = Image.open(directory + "IMG_2.jpg")
-    img_3 = Image.open(directory + "IMG_3.jpg")
-    img_4 = Image.open(directory + "IMG_4.jpg")
-    img_5 = Image.open(directory + "IMG_5.jpg")
+    img_list = []
+    for i in range(1, count+1):
+        img = Image.open(f'{directory}IMG_{i}.jpg')
+        img_list.append(img)
 
-    imgSize = img_1.size
+    if len(img_list) == 0:
+        print(f'No images saved in {directory}')
+        return
+
+    img_size = img_list[0].size
+
+    num_rows = 2
+    num_cols = math.ceil(len(img_list) / 2)
 
     #empty image
-    mergedImg = Image.new(mode="RGB", size=(3*imgSize[0], 2*imgSize[1]), color=(0,0,0))
+    mergedImg = Image.new(mode="RGB", size=(num_cols*img_size[0], num_rows*img_size[1]), color=(0,0,0))
 
-    mergedImg.paste(img_1, (0,0))
-    mergedImg.paste(img_2, (imgSize[0],0))
-    mergedImg.paste(img_3, (imgSize[0]*2,0))
-    mergedImg.paste(img_4, (0,imgSize[1]))
-    mergedImg.paste(img_5, (imgSize[0],imgSize[1]))
+    for i, img in enumerate(img_list):
+        row = i // num_cols
+        col = i % num_cols
+        mergedImg.paste(img, (col * img_size[0], row * img_size[1]))
 
     mergedImg.save(directory + "mergedImage.jpg")
     mergedImg.show()
@@ -174,7 +181,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         
         #TODO: Can use break and stop server?
         if command == 'merge':
-            merge_images()
+            merge_images(verification_dir, count)
+            count -=1
+            image_hub.send_reply(("Merged").encode())
             continue
 
         image = cv2.resize(image, (416, 320))

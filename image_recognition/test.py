@@ -42,9 +42,9 @@ import cv2
 
 if __name__ == '__main__':
 
-    command = 'capture'
+    command = 'merge'
 
-    connect_to = 'tcp://10.27.163.165:5555'
+    connect_to = 'tcp://10.27.228.226:5555'
     sender = imagezmq.ImageSender(connect_to=connect_to)
 
     img = None
