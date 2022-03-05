@@ -2,7 +2,7 @@ import socket
 import threading
 
 HOST = '192.168.27.27'  # The server's hostname or IP address
-PORT = 5007        # The port used by the server
+PORT = 5004        # The port used by the server
 
 s = socket.socket()
 s.connect((HOST, PORT))

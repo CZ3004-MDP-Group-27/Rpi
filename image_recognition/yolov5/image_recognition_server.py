@@ -56,7 +56,10 @@ from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
 
-verification_dir = r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/MDP_Verification/'
+cwd = os.getcwd()
+
+verification_dir = os.path.join(cwd, 'MDP_Verifiction')
+debug_dir = os.path.join(cwd, 'image_dump')
 
 names_to_label_map = {
     'alphabetA': 20,
@@ -97,7 +100,7 @@ names_to_label_map = {
 def merge_images(directory, count=8):
 
     img_list = []
-    for i in range(1, count+1):
+    for i in range(count):
         img = Image.open(f'{directory}IMG_{i}.jpg')
         img_list.append(img)
 
@@ -126,7 +129,7 @@ def merge_images(directory, count=8):
 def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
         data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-        imgsz=(640, 640),  # inference size (height, width)
+        imgsz=(416, 320),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
@@ -144,13 +147,17 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         project=ROOT / 'runs/detect',  # save results to project/name
         name='exp',  # save results to project/name
         exist_ok=False,  # existing project/name ok, do not increment
-        line_thickness=3,  # bounding box thickness (pixels)
+        line_thickness=1,  # bounding box thickness (pixels)
         hide_labels=False,  # hide labels
         hide_conf=False,  # hide confidences
         half=False,  # use FP16 half-precision inference
         dnn=False,  # use OpenCV DNN for ONNX inference
         ):
     source = str(source)
+
+
+    # TODO: Load multiple models and if you dont find a class in 1 model use another model
+
 
     # Load model
     device = select_device(device)
@@ -174,19 +181,33 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz), half=half)
     # Set up image_rec server
 
-    count = 1
+    count = 0
+    x = 0
+
+    image_buffer = []
+    image_list = []
+
+    if not os.path.isdir(verification_dir):
+        os.makedirs(verification_dir)
+
+    if not os.path.isdir(debug_dir):
+        os.makedirs(debug_dir)
+
     while True:
 
         command, image = image_hub.recv_image()
         
-        #TODO: Can use break and stop server?
         if command == 'merge':
             merge_images(verification_dir, count)
-            count -=1
+            #count = 0
             image_hub.send_reply(("Merged").encode())
-            continue
+            break
 
         image = cv2.resize(image, (416, 320))
+        print(os.path.join(debug_dir, 'IMG_' + str(x) + 'jpg'))
+        cv2.imwrite(os.path.join(debug_dir, 'IMG_' + str(x) + '.jpg'), image)
+        x+=1
+        image_list.append(image)
         image_copy = image.copy()
 
         image_copy = letterbox(image, imgsz, stride=stride, auto=pt)[0]
@@ -200,42 +221,84 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         if len(im.shape) == 3:
             im = im[None]  # expand for batch dim
 
-        pred = model(im, augment=augment)
-        pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-        for i, det in enumerate(pred): # Only predicting on 1 image
+        image_buffer.append(im)
 
-            annotator = Annotator(image, line_width=line_thickness, example=str(names))
+        if command == 'capture':
+            image_hub.send_reply(("Captured").encode())
+            continue
 
-            main_class = '-1'
-            highest_conf = 0.0
-            for *xyxy, conf, cls in reversed(det):
+        if command == 'predict':
+
+            found = False
+            main_class = -1
+            while (len(image_buffer) > 0):
+                pred = model(image_buffer[-1], augment=augment)
+                pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+                for i, det in enumerate(pred): # Only predicting on 1 image
+
+                    annotator = Annotator(image_list[-1], line_width=line_thickness, example=str(names))
+
+                    highest_conf = 0.0
+                    for *xyxy, conf, cls in reversed(det):
+                        
+                        # If first detection then keep that as main class
+
+                        if main_class == -1:
+                            label_name = names[int(cls)]
+                            highest_conf = conf
+                            main_class = names_to_label_map[label_name]
+
+                        # If the main class is bullseye then overwirte main class without further checks
+                        elif main_class == 0:
+                            label_name = names[int(cls)]
+                            highest_conf = conf
+                            main_class = names_to_label_map[label_name]
+
+                        # If the confidence is higher than the current best
+                        # Note: This bock will only be executed if the main class is not -1 (None) and not 0 (bullseye)
+                        elif conf > highest_conf:
+                            label_name = names[int(cls)]
+                            # If prediction is bullseye but we have found another class then ignore the bullseye
+                            if label_name == 'bullseye':
+                                continue
+                            highest_conf = conf
+                            main_class = names_to_label_map[label_name]
+
+                        c = int(cls)  # integer class
+                        label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                        annotator.box_label(xyxy, label, color=colors(c, True))
+
+                    print(int(main_class))
+                    print(highest_conf)
+
+                    # If we got main label save it
+                    if main_class != -1 and main_class != 0:
+                        image_buffer = []
+                        image_list = []
+                        image_hub.send_reply(str(main_class).encode())
+                        img_pred = annotator.result()
+                        cv2.imwrite(os.path.join(verification_dir, 'IMG_' + str(count) + '.jpg'), img_pred)
+                        print('Saved Image')
+                        count += 1
+                        found = True
+
+                    # cv2.imshow("RPi Camera", img_pred)
+                    # cv2.waitKey(1)  # 1 millisecond
+
+                if found:
+                    break
+
+                if len(image_buffer) > 0:
+                    image_buffer.pop()
+
+                if len(image_list) > 0:
+                    image_list.pop()
+
+            if not found:
+                # Send either 0 or -1
+                image_hub.send_reply((str(main_class)).encode())
+
                 
-                if conf > highest_conf:
-                    highest_conf = conf
-                    label_name = names[int(cls)]
-                    main_class = names_to_label_map[label_name]
-
-                c = int(cls)  # integer class
-                label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                annotator.box_label(xyxy, label, color=colors(c, True))
-
-            if main_class == None:
-                main_class == '-1'
-            print(int(main_class))
-            image_hub.send_reply(str(int(main_class)).encode())
-            img_pred = annotator.result()
-
-            if command == 'capture':
-                # TODO: REMOVE THIS LINE AFTER CHECKLIST
-                if count < 1000: # To make sure not many images are taken
-                    cv2.imwrite(verification_dir + 'IMG_' + str(count) + '.jpg', img_pred)
-                    print('Saved Image')
-                count += 1
-
-            # cv2.imshow("RPi Camera", img_pred)
-            # cv2.waitKey(1)  # 1 millisecond
-
-
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model path(s)')
