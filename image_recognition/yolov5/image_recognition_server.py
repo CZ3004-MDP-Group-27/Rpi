@@ -78,7 +78,8 @@ names_to_label_map = {
     'alphabetX': 33, 
     'alphabetY': 34, 
     'alphabetZ': 35, 
-    'bullseye': 0, 
+    'bullseye': 0,
+    'bulleye': 0, 
     'down_arrow': 37, 
     'eight': 18, 
     'five': 15, 
@@ -93,7 +94,7 @@ names_to_label_map = {
     'three': 13, 
     'two': 12, 
     'up_arrow': 36,
-    'None': -1
+    '-1': -1
 }
 
 
@@ -101,7 +102,7 @@ def merge_images(directory, count=8):
 
     img_list = []
     for i in range(count):
-        img = Image.open(f'{directory}IMG_{i}.jpg')
+        img = Image.open(os.path.join(directory, f'IMG_{i}.jpg'))
         img_list.append(img)
 
     if len(img_list) == 0:
@@ -158,17 +159,32 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
     # TODO: Load multiple models and if you dont find a class in 1 model use another model
 
-
-    # Load model
     device = select_device(device)
-    model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data)
-    stride, names, pt, jit, onnx, engine = model.stride, model.names, model.pt, model.jit, model.onnx, model.engine
-    imgsz = check_img_size(imgsz, s=stride)  # check image size
 
-    # Half
-    half &= (pt or jit or onnx or engine) and device.type != 'cpu'  # FP16 supported on limited backends with CUDA
-    if pt or jit:
-        model.model.half() if half else model.model.float()
+    weight_list = [
+        'trained_models/exp3/best.pt',
+        'trained_models/exp2/best.pt',
+        'trained_models/exp3/last.pt',
+        'trained_models/exp1/best.pt',
+    ]
+
+    model_list = []
+    names_list = []
+
+    for weights in weight_list:
+        model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data)
+        stride, names, pt, jit, onnx, engine = model.stride, model.names, model.pt, model.jit, model.onnx, model.engine
+        names_list.append(names)
+        imgsz = check_img_size(imgsz, s=stride)  # check image size
+
+        # Half
+        half &= (pt or jit or onnx or engine) and device.type != 'cpu'  # FP16 supported on limited backends with CUDA
+        if pt or jit:
+            model.model.half() if half else model.model.float()
+        
+        model.warmup(imgsz=(1 if pt else bs, 3, *imgsz), half=half)
+
+        model_list.append(model)
 
     # Dataloader
     #dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
@@ -198,9 +214,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         command, image = image_hub.recv_image()
         
         if command == 'merge':
-            merge_images(verification_dir, count)
-            #count = 0
             image_hub.send_reply(("Merged").encode())
+            merge_images(verification_dir, count)
             break
 
         image = cv2.resize(image, (416, 320))
@@ -232,58 +247,62 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
             found = False
             main_class = -1
             while (len(image_buffer) > 0):
-                pred = model(image_buffer[-1], augment=augment)
-                pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-                for i, det in enumerate(pred): # Only predicting on 1 image
 
-                    annotator = Annotator(image_list[-1], line_width=line_thickness, example=str(names))
+                for model_idx, model in enumerate(model_list):
+                    names = names_list[model_idx]
+                    pred = model(image_buffer[-1], augment=augment)
+                    pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+                    for i, det in enumerate(pred): # Only predicting on 1 image
 
-                    highest_conf = 0.0
-                    for *xyxy, conf, cls in reversed(det):
-                        
-                        # If first detection then keep that as main class
+                        annotator = Annotator(image_list[-1], line_width=line_thickness, example=str(names))
 
-                        if main_class == -1:
-                            label_name = names[int(cls)]
-                            highest_conf = conf
-                            main_class = names_to_label_map[label_name]
+                        highest_conf = 0.0
+                        for *xyxy, conf, cls in reversed(det):
+                            
+                            # If first detection then keep that as main class
 
-                        # If the main class is bullseye then overwirte main class without further checks
-                        elif main_class == 0:
-                            label_name = names[int(cls)]
-                            highest_conf = conf
-                            main_class = names_to_label_map[label_name]
+                            if main_class == -1:
+                                label_name = names[int(cls)]
+                                highest_conf = conf
+                                main_class = names_to_label_map[label_name]
 
-                        # If the confidence is higher than the current best
-                        # Note: This bock will only be executed if the main class is not -1 (None) and not 0 (bullseye)
-                        elif conf > highest_conf:
-                            label_name = names[int(cls)]
-                            # If prediction is bullseye but we have found another class then ignore the bullseye
-                            if label_name == 'bullseye':
-                                continue
-                            highest_conf = conf
-                            main_class = names_to_label_map[label_name]
+                            # If the main class is bullseye then overwirte main class without further checks
+                            elif main_class == 0:
+                                label_name = names[int(cls)]
+                                highest_conf = conf
+                                main_class = names_to_label_map[label_name]
 
-                        c = int(cls)  # integer class
-                        label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                        annotator.box_label(xyxy, label, color=colors(c, True))
+                            # If the confidence is higher than the current best
+                            # Note: This bock will only be executed if the main class is not -1 (None) and not 0 (bullseye)
+                            # TODO: Change to else: and if bbox area is higher then select that
+                            elif conf > highest_conf:
+                                label_name = names[int(cls)]
+                                # If prediction is bullseye but we have found another class then ignore the bullseye
+                                if label_name == 'bullseye' or label_name == 'bulleye':
+                                    continue
+                                highest_conf = conf
+                                main_class = names_to_label_map[label_name]
 
-                    print(int(main_class))
-                    print(highest_conf)
+                            c = int(cls)  # integer class
+                            label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                            annotator.box_label(xyxy, label, color=colors(c, True))
 
-                    # If we got main label save it
-                    if main_class != -1 and main_class != 0:
-                        image_buffer = []
-                        image_list = []
-                        image_hub.send_reply(str(main_class).encode())
-                        img_pred = annotator.result()
-                        cv2.imwrite(os.path.join(verification_dir, 'IMG_' + str(count) + '.jpg'), img_pred)
-                        print('Saved Image')
-                        count += 1
-                        found = True
+                        print(int(main_class))
+                        print(highest_conf)
 
-                    # cv2.imshow("RPi Camera", img_pred)
-                    # cv2.waitKey(1)  # 1 millisecond
+                        # If we got main label save it
+                        if main_class != -1 and main_class != 0:
+                            print(f'Found image with model {model_idx + 1}')
+                            image_buffer = []
+                            image_list = []
+                            image_hub.send_reply(str(main_class).encode())
+                            img_pred = annotator.result()
+                            cv2.imwrite(os.path.join(verification_dir, 'IMG_' + str(count) + '.jpg'), img_pred)
+                            print('Saved Image')
+                            count += 1
+                            found = True
+                    if found:
+                        break
 
                 if found:
                     break
@@ -322,9 +341,9 @@ def parse_opt():
     parser.add_argument('--project', default=ROOT / 'runs/detect', help='save results to project/name')
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
-    parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
+    parser.add_argument('--line-thickness', default=2, type=int, help='bounding box thickness (pixels)')
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
-    parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
+    parser.add_argument('--hide-conf', default=True, action='store_true', help='hide confidences')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
     opt = parser.parse_args()
