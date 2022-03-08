@@ -58,7 +58,7 @@ from utils.torch_utils import select_device, time_sync
 
 cwd = os.getcwd()
 
-verification_dir = os.path.join(cwd, 'MDP_Verifiction')
+verification_dir = os.path.join(cwd, 'MDP_Verification')
 debug_dir = os.path.join(cwd, 'image_dump')
 
 names_to_label_map = {
@@ -162,8 +162,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     device = select_device(device)
 
     weight_list = [
-        'trained_models/exp3/best.pt',
         'trained_models/exp2/best.pt',
+        'trained_models/exp3/best.pt',
         'trained_models/exp3/last.pt',
         'trained_models/exp1/best.pt',
     ]
@@ -257,35 +257,50 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                         annotator = Annotator(image_list[-1], line_width=line_thickness, example=str(names))
 
                         highest_conf = 0.0
+                        max_area = 0.0
                         for *xyxy, conf, cls in reversed(det):
+
+                            print(xyxy)
                             
                             # If first detection then keep that as main class
 
                             if main_class == -1:
                                 label_name = names[int(cls)]
                                 highest_conf = conf
+                                x1, y1, x2, y2 = xyxy
+                                max_area = (x2-x1) * (y2-y1)
+                                print(max_area)
                                 main_class = names_to_label_map[label_name]
 
                             # If the main class is bullseye then overwirte main class without further checks
                             elif main_class == 0:
                                 label_name = names[int(cls)]
                                 highest_conf = conf
+                                x1, y1, x2, y2 = xyxy
+                                max_area = (x2-x1) * (y2-y1)
                                 main_class = names_to_label_map[label_name]
 
                             # If the confidence is higher than the current best
                             # Note: This bock will only be executed if the main class is not -1 (None) and not 0 (bullseye)
                             # TODO: Change to else: and if bbox area is higher then select that
-                            elif conf > highest_conf:
+                            else:
                                 label_name = names[int(cls)]
                                 # If prediction is bullseye but we have found another class then ignore the bullseye
                                 if label_name == 'bullseye' or label_name == 'bulleye':
                                     continue
-                                highest_conf = conf
-                                main_class = names_to_label_map[label_name]
+
+                                x1, y1, x2, y2 = xyxy
+                                area = (x2-x1) * (y2-y1)
+                                print(area)
+                                if area > max_area:
+                                    highest_conf = conf
+                                    main_class = names_to_label_map[label_name]
+                                    max_area = area
 
                             c = int(cls)  # integer class
                             label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                            annotator.box_label(xyxy, label, color=colors(c, True))
+                            label_only = names[c]
+                            annotator.box_label(xyxy, label + " : " + str(names_to_label_map[label_only]), color=colors(c, True))
 
                         print(int(main_class))
                         print(highest_conf)
