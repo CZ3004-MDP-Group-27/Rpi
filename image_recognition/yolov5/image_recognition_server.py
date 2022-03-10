@@ -58,8 +58,8 @@ from utils.torch_utils import select_device, time_sync
 
 cwd = os.getcwd()
 
-verification_dir = os.path.join(cwd, 'MDP_Verification')
-debug_dir = os.path.join(cwd, 'image_dump')
+verification_dir = os.path.join(cwd, 'mdp_verification_folder')
+debug_dir = os.path.join(cwd, 'image_dump_folder')
 
 names_to_label_map = {
     'alphabetA': 20,
@@ -122,7 +122,7 @@ def merge_images(directory, count=8):
         col = i % num_cols
         mergedImg.paste(img, (col * img_size[0], row * img_size[1]))
 
-    mergedImg.save(directory + "mergedImage.jpg")
+    mergedImg.save(directory + "/mergedImage.jpg")
     mergedImg.show()
 
 
@@ -269,8 +269,8 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                                 highest_conf = conf
                                 x1, y1, x2, y2 = xyxy
                                 max_area = (x2-x1) * (y2-y1)
-                                print(max_area)
                                 main_class = names_to_label_map[label_name]
+                                print(f"Area: {max_area}, Class: {main_class}")
 
                             # If the main class is bullseye then overwirte main class without further checks
                             elif main_class == 0:
@@ -279,6 +279,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                                 x1, y1, x2, y2 = xyxy
                                 max_area = (x2-x1) * (y2-y1)
                                 main_class = names_to_label_map[label_name]
+                                print(f"Area: {max_area}, Class: {main_class}")
 
                             # If the confidence is higher than the current best
                             # Note: This bock will only be executed if the main class is not -1 (None) and not 0 (bullseye)
@@ -296,6 +297,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
                                     highest_conf = conf
                                     main_class = names_to_label_map[label_name]
                                     max_area = area
+                                    print(f"Area: {max_area}, Class: {main_class}")
 
                             c = int(cls)  # integer class
                             label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')

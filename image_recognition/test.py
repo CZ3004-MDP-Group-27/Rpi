@@ -42,18 +42,16 @@ import cv2
 
 if __name__ == '__main__':
 
-    command = 'capture'
+    command = 'predict'
 
-    connect_to = 'tcp://192.168.27.28:5555'
+    connect_to = 'tcp://192.168.0.102:5555'
     sender = imagezmq.ImageSender(connect_to=connect_to)
 
     img = None
 
-    directory = r'C:/Users/Atul/Desktop/Rpi/image_recognition/datasets/test/'
+    directory = r'C:/Users/Atul/Desktop/Rpi/image_recognition/yolov5/image_dump/'
         
     for i, file in enumerate(os.listdir(directory)):
-        if i == 0:
-            command='predict'
         print(file)
         img = cv2.imread(directory + file, cv2.IMREAD_COLOR)
         reply = sender.send_image(command, img)
@@ -62,6 +60,5 @@ if __name__ == '__main__':
         reply = reply.decode("utf-8")
         print(type(reply))
         print(reply)
-        if command == 'predict':
-            break
-        
+    
+    reply = sender.send_image("merge", img)
